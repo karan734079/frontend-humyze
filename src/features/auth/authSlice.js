@@ -1,17 +1,28 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import api from '../../services/axios';
+import { supabase } from '../../services/supabase';
 
 // Register User
 export const register = createAsyncThunk(
   'auth/register',
   async (userData, thunkAPI) => {
     try {
-      const response = await api.post('/auth/register', userData);
-      localStorage.setItem('token', response.data.token);
-      return response.data;
+      const { data, error } = await supabase.auth.signUp({
+        email: userData.email,
+        password: userData.password,
+        options: {
+          data: {
+            name: userData.name,
+          }
+        }
+      });
+      if (error) throw error;
+      return {
+        id: data.user.id,
+        email: data.user.email,
+        name: data.user.user_metadata?.name || '',
+      };
     } catch (error) {
-      const message = error.response?.data?.message || error.message;
-      return thunkAPI.rejectWithValue(message);
+      return thunkAPI.rejectWithValue(error.message);
     }
   }
 );
@@ -21,33 +32,31 @@ export const login = createAsyncThunk(
   'auth/login',
   async (userData, thunkAPI) => {
     try {
-      const response = await api.post('/auth/login', userData);
-      localStorage.setItem('token', response.data.token);
-      return response.data;
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: userData.email,
+        password: userData.password,
+      });
+      if (error) throw error;
+      return {
+        id: data.user.id,
+        email: data.user.email,
+        name: data.user.user_metadata?.name || '',
+      };
     } catch (error) {
-      const message = error.response?.data?.message || error.message;
-      return thunkAPI.rejectWithValue(message);
+      return thunkAPI.rejectWithValue(error.message);
     }
   }
 );
 
-const userStr = localStorage.getItem('user');
-let user = null;
-if (userStr && userStr !== 'undefined') {
-  try { user = JSON.parse(userStr); } catch (e) { }
-}
-
-const initialState = {
-  user: user ? user : null,
-  isError: false,
-  isSuccess: false,
-  isLoading: false,
-  message: '',
-};
-
 export const authSlice = createSlice({
   name: 'auth',
-  initialState,
+  initialState: {
+    user: null,
+    isError: false,
+    isSuccess: false,
+    isLoading: false,
+    message: '',
+  },
   reducers: {
     reset: (state) => {
       state.isLoading = false;
@@ -56,9 +65,19 @@ export const authSlice = createSlice({
       state.message = '';
     },
     logout: (state) => {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
       state.user = null;
+      supabase.auth.signOut();
+    },
+    setUser: (state, action) => {
+      if (action.payload) {
+        state.user = {
+          id: action.payload.id,
+          email: action.payload.email,
+          name: action.payload.user_metadata?.name || '',
+        };
+      } else {
+        state.user = null;
+      }
     }
   },
   extraReducers: (builder) => {
@@ -70,7 +89,6 @@ export const authSlice = createSlice({
         state.isLoading = false;
         state.isSuccess = true;
         state.user = action.payload;
-        localStorage.setItem('user', JSON.stringify(action.payload));
       })
       .addCase(register.rejected, (state, action) => {
         state.isLoading = false;
@@ -85,7 +103,6 @@ export const authSlice = createSlice({
         state.isLoading = false;
         state.isSuccess = true;
         state.user = action.payload;
-        localStorage.setItem('user', JSON.stringify(action.payload));
       })
       .addCase(login.rejected, (state, action) => {
         state.isLoading = false;
@@ -96,5 +113,5 @@ export const authSlice = createSlice({
   },
 });
 
-export const { reset, logout } = authSlice.actions;
+export const { reset, logout, setUser } = authSlice.actions;
 export default authSlice.reducer;

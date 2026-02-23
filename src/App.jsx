@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Navbar from './components/layout/Navbar';
 import DashboardLayout from './components/layout/DashboardLayout';
@@ -8,10 +8,21 @@ import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import UploadPage from './pages/UploadPage';
 import ReportPage from './pages/ReportPage';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
+import { supabase } from './services/supabase';
+import { setUser } from './features/auth/authSlice';
 
 function App() {
     const { user } = useSelector((state) => state.auth);
+    const dispatch = useDispatch();
+
+    useEffect(() => {
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+            dispatch(setUser(session?.user || null));
+        });
+
+        return () => subscription.unsubscribe();
+    }, [dispatch]);
 
     return (
         <BrowserRouter>
